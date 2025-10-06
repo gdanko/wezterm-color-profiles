@@ -154,7 +154,7 @@ def main():
     parser.add_argument('-i', '--iterm2', action='store_true', help='Convert iTerm2 color themes')
     parser.add_argument('-k', '--kitty', action='store_true', help='Convert Kitty term color themes')
     parser.add_argument('-a', '--all', action='store_true', help='Convert both iTerm2 and Kitty term color themes')
-    parser.add_argument('-o', '--outfile', help='Specify an output filename')
+    parser.add_argument('-o', '--outfile', default='wezterm-color-schemes.json', help='Specify an output filename')
     args = parser.parse_args()
 
     if not which('git'):
@@ -165,21 +165,45 @@ def main():
         print('Only one of --iterm2, --kitty, and --all is allowed')
         sys.exit(1)
 
+    if Path(args.outfile).exists():
+        print(f'The output file "{args.outfile}" already exists, please try a different path')
+        sys.exit(1)
+
     all_themes = {}
 
     if args.all:
         args.iterm2 = True
         args.kitty = True
-    
+
     tempdir = tempfile.TemporaryDirectory()
 
     if args.iterm2:
         iterm2_themes = do_iterm2(tempdir=tempdir)
-        pprint(iterm2_themes)
 
     if args.kitty:
         kitty_themes = do_kitty(tempdir=tempdir)
-        pprint(kitty_themes)
-    
+
+    if args.iterm2 and not args.kitty:
+        all_themes = iterm2_themes
+
+    elif not args.iterm2 and args.kitty:
+        all_themes = kitty_themes
+
+    elif iterm2_themes and kitty_themes:
+        all_themes = iterm2_themes
+        for theme_name, theme in kitty_themes.items():
+            if theme_name in all_themes:
+                new_theme_name = f'{theme_name} (Kitty)'
+                all_themes[new_theme_name] = theme
+            else:
+                all_themes[theme_name] = theme
+
+    sorted_themes = dict(sorted(all_themes.items()))
+
+    with open(args.outfile, 'w') as f:
+        json.dump(sorted_themes, f, indent=4)
+
+        print(f'Generated {len(sorted_themes)} themes in {args.outfile}')
+
 if __name__ == '__main__':
     main()
